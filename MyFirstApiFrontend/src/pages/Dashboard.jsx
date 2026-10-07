@@ -441,15 +441,6 @@ const handleSaveSalary = async () => {
 
                 <h2>MyFirstApi</h2>
 
-
-                <button
-                    className="secondary-button"
-                    onClick={() => setShowSalary(true)}
-                >
-                    Salary
-                </button>
-
-
                 <button
                     className="logout-button"
                     onClick={handleLogout}
@@ -646,21 +637,6 @@ const handleSaveSalary = async () => {
                     <h2>
                         Employee List
                     </h2>
-
-
-                    <button
-                        className="secondary-button"
-                        onClick={handleGetEmployees}
-                        disabled={loading}
-                    >
-
-                        {loading
-                            ? "Loading..."
-                            : "Refresh Employees"
-                        }
-
-                    </button>
-
 
                     <br />
                     <br />
