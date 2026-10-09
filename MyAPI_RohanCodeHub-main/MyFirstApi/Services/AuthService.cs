@@ -40,12 +40,7 @@ namespace MyFirstApi.Services
 
                     return new Tuple<int, TokenDto>(0, tokenDto);
                 }
-
-                //if (existingUser.Password != dto.Password)
-                //{
-                //    return new Tuple<int, string>(1, "Password Incorrect");
-                //}
-
+           
                 var passwordHasher = new PasswordHasher<string>();
 
                 var verifyPassword = passwordHasher.VerifyHashedPassword(dto.Email, existingUser.Password, dto.Password);
