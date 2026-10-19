@@ -1,3 +1,5 @@
 <Solution>
+  <Project Path="MyFirstApi.Business/MyFirstApi.Business.csproj" Id="da1db383-9b27-4e27-b87c-148733a9b8c1" />
+  <Project Path="MyFirstApi.Data/MyFirstApi.Data.csproj" Id="d89ce90f-172f-42f7-bc16-a58a3b5714fa" />
   <Project Path="MyFirstApi/MyFirstApi.csproj" />
 </Solution>

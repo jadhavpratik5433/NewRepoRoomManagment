@@ -269,6 +269,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISalaryService, SalaryServices>(); 
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<ICourseService, CourseService>();
 
 
 // ======================================================
