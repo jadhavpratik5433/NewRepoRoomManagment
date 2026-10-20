@@ -139,6 +139,8 @@ namespace MyFirstApi.Migrations
 
                     b.HasIndex("CourseId");
 
+                    b.HasIndex("StudentId");
+
                     b.ToTable("Enrollments");
                 });
 
@@ -211,7 +213,15 @@ namespace MyFirstApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyFirstApi.Entities.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Course");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("MyFirstApi.Entities.Salary", b =>

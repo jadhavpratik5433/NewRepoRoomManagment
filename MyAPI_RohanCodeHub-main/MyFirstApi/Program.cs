@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,11 +11,6 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-// ======================================================
-// DATABASE
-// ======================================================
-
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")
@@ -22,273 +18,207 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 );
 
 
-// ======================================================
-// CORS - REACT FRONTEND
-// ======================================================
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactPolicy", policy =>
     {
         policy
-            .AllowAnyOrigin()
+            .WithOrigins("http://localhost:5173")
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
 
-// ======================================================
-// JWT AUTHENTICATION
-// ======================================================
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme =
-        JwtBearerDefaults.AuthenticationScheme;
-
-    options.DefaultChallengeScheme =
-        JwtBearerDefaults.AuthenticationScheme;
-
-})
-.AddJwtBearer(options =>
-{
-    options.RequireHttpsMetadata = false;
-
-    options.SaveToken = true;
-
-
-    // JWT Validation
-    options.TokenValidationParameters =
-        new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-
-            ValidateAudience = true,
-
-            ValidateLifetime = true,
-
-            ValidateIssuerSigningKey = true,
-
-
-            ValidIssuer =
-                builder.Configuration["JWT:Issuer"],
-
-
-            ValidAudience =
-                builder.Configuration["JWT:Audience"],
-
-
-            IssuerSigningKey =
-                new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(
-                        builder.Configuration["JWT:Key"]!
-                    )
-                )
-        };
-
-
-    // ==================================================
-    // TOKEN VALIDATED
-    // ==================================================
-
-    options.Events = new JwtBearerEvents
+builder.Services
+    .AddAuthentication(options =>
     {
-        OnTokenValidated = async context =>
-        {
-            var userId =
-                context.Principal?
-                    .FindFirst(ClaimTypes.NameIdentifier)?
-                    .Value;
+        // Existing JWT remains the default scheme.
+        options.DefaultAuthenticateScheme =
+            JwtBearerDefaults.AuthenticationScheme;
 
+        options.DefaultChallengeScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+    })
 
-            var sessionId =
-                context.Principal?
-                    .FindFirst("session_id")?
-                    .Value;
+    
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = false;
+        options.SaveToken = true;
 
-
-            // Check Claims
-            if (string.IsNullOrEmpty(userId) ||
-                string.IsNullOrEmpty(sessionId))
+        options.TokenValidationParameters =
+            new TokenValidationParameters
             {
-                context.Fail("Invalid Request");
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
 
-                return;
-            }
+                ValidIssuer =
+                    builder.Configuration["JWT:Issuer"],
 
+                ValidAudience =
+                    builder.Configuration["JWT:Audience"],
 
-            // Get DB Context
-            var db =
-                context.HttpContext
-                    .RequestServices
+                IssuerSigningKey =
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(
+                            builder.Configuration["JWT:Key"]!
+                        )
+                    )
+            };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?
+                    .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                var sessionId = context.Principal?
+                    .FindFirst("session_id")?.Value;
+
+                if (string.IsNullOrEmpty(userId) ||
+                    string.IsNullOrEmpty(sessionId))
+                {
+                    context.Fail("Invalid Request");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices
                     .GetRequiredService<AppDbContext>();
 
+                if (!Guid.TryParse(userId, out Guid guidUserId))
+                {
+                    context.Fail("Invalid User Id");
+                    return;
+                }
 
-            // Check Guid
-            if (!Guid.TryParse(
-                    userId,
-                    out Guid guidUserId))
+                var user = await db.Users
+                    .FirstOrDefaultAsync(x => x.Id == guidUserId);
+
+                if (user == null)
+                {
+                    context.Fail("Invalid User");
+                    return;
+                }
+
+                if (user.SessionId != sessionId)
+                {
+                    context.Fail("Session Expired");
+                    return;
+                }
+            },
+
+            OnChallenge = async context =>
             {
-                context.Fail("Invalid User Id");
+                context.HandleResponse();
 
-                return;
+                context.Response.StatusCode =
+                    StatusCodes.Status401Unauthorized;
+
+                context.Response.ContentType = "application/json";
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    success = false,
+                    message =
+                        "Unauthorized. Please provide a valid access token."
+                });
             }
+        };
+    })
 
+    .AddCookie("CourseCookie", options =>
+    {
+        options.Cookie.Name = "CourseManagement.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.None;
 
-            // Find User
-            var user =
-                await db.Users
-                    .FirstOrDefaultAsync(
-                        x => x.Id == guidUserId
-                    );
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+        options.SlidingExpiration = true;
 
-
-            if (user == null)
-            {
-                context.Fail("Invalid User");
-
-                return;
-            }
-
-
-            // Check Session
-            if (user.SessionId.ToString() != sessionId)
-            {
-                context.Fail("Session Expired");
-
-                return;
-            }
-        },
-
-
-        // ==================================================
-        // UNAUTHORIZED RESPONSE
-        // ==================================================
-
-        OnChallenge = async context =>
+        options.Events.OnRedirectToLogin = context =>
         {
-            context.HandleResponse();
-
-
             context.Response.StatusCode =
                 StatusCodes.Status401Unauthorized;
 
-
-            context.Response.ContentType =
-                "application/json";
-
-
-            var response = new
+            return context.Response.WriteAsJsonAsync(new
             {
                 success = false,
+                message = "Please log in first."
+            });
+        };
 
-                message =
-                    "Unauthorized. Please provide a valid access token."
-            };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode =
+                StatusCodes.Status403Forbidden;
 
+            return context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                message = "You do not have permission to access this resource."
+            });
+        };
+    });
 
-            await context.Response
-                .WriteAsJsonAsync(response);
-        }
-    };
-});
-
-
-// ======================================================
-// AUTHORIZATION
-// ======================================================
 
 builder.Services.AddAuthorization();
 
-
-// ======================================================
-// CONTROLLERS
-// ======================================================
-
 builder.Services.AddControllers();
-
-
-// ======================================================
-// SWAGGER
-// ======================================================
 
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
-    // JWT Bearer Definition
+ 
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
         {
             Name = "Authorization",
-
             Type = SecuritySchemeType.Http,
-
             Scheme = "bearer",
-
             BearerFormat = "JWT",
-
             In = ParameterLocation.Header,
-
-            Description =
-                "Enter JWT token. Example: Bearer {your token}"
+            Description = "Enter JWT token. Example: Bearer {your token}"
         }
     );
 
-
-    // JWT Security Requirement
     options.AddSecurityRequirement(
         new OpenApiSecurityRequirement
         {
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference =
-                        new OpenApiReference
-                        {
-                            Type =
-                                ReferenceType.SecurityScheme,
-
-                            Id = "Bearer"
-                        }
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
                 },
-
                 Array.Empty<string>()
             }
         }
     );
 });
 
-
-// ======================================================
-// SERVICES - DEPENDENCY INJECTION
-// ======================================================
-
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ISalaryService, SalaryServices>(); 
+builder.Services.AddScoped<ISalaryService, SalaryServices>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 
 
-// ======================================================
-// BUILD APP
-// ======================================================
-
 var app = builder.Build();
-
-
-// ======================================================
-// DATABASE MIGRATION
-// ======================================================
 
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext =
-        scope.ServiceProvider
-            .GetRequiredService<AppDbContext>();
-
+    var dbContext = scope.ServiceProvider
+        .GetRequiredService<AppDbContext>();
 
     try
     {
@@ -296,61 +226,22 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        Console.WriteLine(
-            "Database Migration Error:"
-        );
-
+        Console.WriteLine("Database Migration Error:");
         Console.WriteLine(ex);
     }
 }
 
-
-// ======================================================
-// SWAGGER
-// ======================================================
-
 app.UseSwagger();
-
 app.UseSwaggerUI();
-
-
-// ======================================================
-// HTTPS
-// ======================================================
 
 app.UseHttpsRedirection();
 
-
-// ======================================================
-// CORS
-// ======================================================
-
 app.UseCors("ReactPolicy");
-
-
-// ======================================================
-// AUTHENTICATION
-// ======================================================
 
 app.UseAuthentication();
 
-
-// ======================================================
-// AUTHORIZATION
-// ======================================================
-
 app.UseAuthorization();
 
-
-// ======================================================
-// CONTROLLERS
-// ======================================================
-
 app.MapControllers();
-
-
-// ======================================================
-// RUN
-// ======================================================
 
 app.Run();

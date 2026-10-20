@@ -11,19 +11,19 @@ namespace MyFirstApi.Entities
         [Required]
         public Guid StudentId { get; set; }
 
+        [ForeignKey(nameof(StudentId))]
+        public User? Student { get; set; }
+
         [Required]
         public int CourseId { get; set; }
+
+        [ForeignKey(nameof(CourseId))]
+        public Course? Course { get; set; }
 
         public DateTime EnrollmentDate { get; set; } = DateTime.UtcNow;
 
         [Required]
         [MaxLength(30)]
         public string Status { get; set; } = "Enrolled";
-
-        [ForeignKey(nameof(CourseId))]
-        public Course? Course { get; set; }
-
-        // Student navigation property will be added
-        // after confirming your existing User entity.
     }
 }
