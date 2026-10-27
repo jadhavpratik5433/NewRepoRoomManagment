@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MyFirstApi.Dto;
 using MyFirstApi.IService;
 
@@ -24,6 +25,7 @@ namespace MyFirstApi.Controllers
         }
 
         // GET: api/Course/GetCourseById/1
+        [Authorize(AuthenticationSchemes = "AdminJwt", Roles = "Admin")]
         [HttpGet("GetCourseById/{id:int}")]
         public async Task<IActionResult> GetCourseById(int id)
         {
@@ -42,6 +44,7 @@ namespace MyFirstApi.Controllers
         }
 
         // POST: api/Course/AddCourse
+        [Authorize(AuthenticationSchemes = "AdminJwt", Roles = "Admin")]
         [HttpPost("AddCourse")]
         public async Task<IActionResult> AddCourse([FromBody] CourseDto courseDto)
         {
@@ -64,6 +67,7 @@ namespace MyFirstApi.Controllers
         }
 
         // PUT: api/Course/UpdateCourse/1
+        [Authorize(AuthenticationSchemes = "AdminJwt", Roles = "Admin")]
         [HttpPut("UpdateCourse/{id:int}")]
         public async Task<IActionResult> UpdateCourse(
             int id,
@@ -94,6 +98,7 @@ namespace MyFirstApi.Controllers
         }
 
         // DELETE: api/Course/DeleteCourse/1
+        [Authorize(AuthenticationSchemes = "AdminJwt", Roles = "Admin")]
         [HttpDelete("DeleteCourse/{id:int}")]
         public async Task<IActionResult> DeleteCourse(int id)
         {

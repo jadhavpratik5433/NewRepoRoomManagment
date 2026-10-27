@@ -3,11 +3,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using MyFirstApi.AdminApi.IService;
+using MyFirstApi.AdminApi.Services;
 using MyFirstApi.Data;
 using MyFirstApi.IService;
 using MyFirstApi.Services;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
+using MyFirstApi.AdminApi.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -131,6 +135,37 @@ builder.Services
         };
     })
 
+        .AddJwtBearer("AdminJwt", options =>
+        {
+            options.RequireHttpsMetadata = false;
+            options.SaveToken = true;
+
+            options.TokenValidationParameters =
+                new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+
+                    ValidIssuer =
+                        builder.Configuration["AdminJWT:Issuer"],
+
+                    ValidAudience =
+                        builder.Configuration["AdminJWT:Audience"],
+
+                    IssuerSigningKey =
+                        new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(
+                                builder.Configuration["AdminJWT:Key"]!
+                            )
+                        ),
+
+                    NameClaimType = ClaimTypes.Name,
+                    RoleClaimType = ClaimTypes.Role
+                };
+        })
+
     .AddCookie("CourseCookie", options =>
     {
         options.Cookie.Name = "CourseManagement.Auth";
@@ -211,6 +246,12 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISalaryService, SalaryServices>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
+
+builder.Services.AddDbContext<AdminDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 
 var app = builder.Build();
